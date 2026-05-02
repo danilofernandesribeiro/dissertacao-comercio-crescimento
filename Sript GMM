@@ -1,0 +1,409 @@
+#################################################################################
+#################################################################################
+# Mestrado em Economia - UFSCar
+# Universidade Federal de São Carlos - UFSCar
+# DISSERTAÇÃO DE DANILO FERNANDES RIBEIRO
+# Orientadora Dra. Rosane
+# Metodologia Dados em Painel Estático
+
+###############################################################################
+# Período de 2000-2022
+# Países ==> 64 países
+# DEFINIÇÃO DAS VARIÁVEIS
+#################################################################################
+# Pacotes necessário para a realização da estimação do modelo
+# Propósito: Fornece funções para análise de regressão e diagnóstico de modelos
+load(.Rdada)
+rm(list=ls());
+library(plm)
+library(lmtest)
+library(MTest)
+library(dplyr)     # Facilita operações comuns em data frames e tibbles como filtragem
+library(psych)     # Uso Principal: Análise estatística e psicométrica
+library(Hmisc)     # Uso Principal: Ferramentas para análise de dados e gráficos.
+library(faraway)   # Uso Principal: Dados e funções para análise estatística
+library(lmtest)    # Uso Principal: Testes para modelos de regressão
+library(stargazer) # Uso Principal: Criação de tabelas de resultados para artigos.
+library(broom)     # Uso Principal: Limpeza e organização de resultados de modelos
+library(xtable)    # Uso Principal: Conversão de tabelas para LaTeX e HTML
+library(knitr)     # Uso Principal: Integração de código e texto em documentos
+library(psych)     # Uso Principal: Estimativas robustas de variância
+library(stargazer) # Uso Principal: Criação de tabelas de resultados para artigos
+library(xtable)    # Uso Principal: Conversão de tabelas para LaTeX e HTML
+library(knitr)      # Uso Principal: Integração de código e texto em documentos
+library(sandwich)   # Uso Principal: Estimativas robustas de variância.
+library(margins)    # Uso Principal: Cálculo de efeitos marginais em modelos de regressão
+library(glm.predict) #Uso Principal: Predições para modelos de regressão generalizados
+library(systemfit) # Uso Principal: Ajuste de sistemas de equações simultâneas
+library(texreg)    # Uso Principal: Criação de tabelas de resultados em LaTeX
+library (miscTools)
+library(pgmm)
+library(tseries)   # Propósito: Análise e modelagem de séries temporais
+library(tidyverse) # Propósito: Conjunto de pacotes para manipulação e visualização de dados
+library(gplots)    # Propósito: Criação de gráficos e visualizações adicionais 
+library(car)
+library(corrplot)
+library(ggcorrplot)
+library(pdynmc)
+options(scipen=999)
+
+################################################################################
+#IMPORTANDO A BASE DE DADOS (File ==> Import dataset )
+
+library(readxl)
+Dados <- read_excel("../Dados/Dados.xlsx", sheet = "Planilha1")
+View(Dados)
+
+###############################################################################
+# Análise dos dados
+
+head(Dados)
+tail(Dados)
+names(Dados)
+str(Dados)
+list(Dados)
+any(is.na(Dados))
+
+################################################################################
+
+# Adicionar variáveis com o logaritmo natural
+ln_com <- log(Dados$`X+M`)
+ln_pibc <- log(Dados$`PIB per capita`)
+ln_inv <-log(Dados$`Formação bruta do capital`)
+ln_exp <-log(Dados$Exportações)
+ln_imp <-log(Dados$Importações)
+
+# Adicionar as novas variáveis ao data frame
+
+Dados$ln_com <-ln_com
+Dados$ln_pibc <-ln_pibc
+Dados$ln_inv <-ln_inv
+Dados$ln_exp <-ln_exp
+Dados$ln_imp <-ln_imp
+
+
+# Calcular desvio padrão
+sd(Dados$ln_pibc, na.rm = TRUE)
+sd(Dados$ln_pibc, na.rm = TRUE)
+sd(Dados$ln_com, na.rm = TRUE)
+sd(Dados$ln_inv, na.rm = TRUE)
+sd(Dados$`Taxa de Câmbio`, na.rm = TRUE)
+sd(Dados$Inflação, na.rm = TRUE)
+sd(Dados$`Capital Humano`, na.rm = TRUE)
+
+
+#########################################################################
+# Exemplo: renomeando variáveis
+names(Dados) <- make.names(names(Dados))
+
+# Verificar os nomes das colunas
+print(names(Dados))
+
+# Modelo One-step Limpo
+
+Dados1<-Dados
+
+#,MODELAGEM DE PAINEL DINÂMICO (GMM-DIF)
+
+# 2. Modelo 1: One-Step (Estimativa em um passo)
+# Útil para conferência inicial, mas menos robusto que o Two-Step.
+Arelanoa<- pdynmc(
+  dat              = Dados1, 
+  varname.i        = "Países", 
+  varname.t        = "Ano",
+  use.mc.diff      = TRUE, 
+  use.mc.lev       = FALSE, 
+  use.mc.nonlin    = FALSE,
+  include.y        = TRUE, 
+  varname.y        = "ln_pibc", 
+  lagTerms.y       = 1,
+  maxLags.y        = 2,           
+  fur.con          = TRUE, 
+  fur.con.diff     = TRUE, 
+  fur.con.lev      = FALSE,
+  varname.reg.fur  = c("ln_com", "ln_inv", "Inflação", "Taxa.de.Câmbio", "Capital.Humano"),
+  lagTerms.reg.fur = c(1, 1, 1, 1, 1),
+  include.dum      = TRUE, 
+  dum.diff         = TRUE, 
+  dum.lev          = TRUE, 
+  varname.dum      = "Ano",
+  w.mat            = "iid.err", 
+  std.err          = "corrected",
+  estimation       = "onestep", 
+  opt.meth         = "none"
+)
+summary(Arelanoa)
+
+#  Modelo 2: Two-Step (Estimativa em dois passos - O MELHOR)
+# Este modelo usa a matriz de pesos ótima e passou melhor no Teste J (Hansen).
+Arelanoa_TwoStep <- pdynmc(
+  dat              = Dados1, 
+  varname.i        = "Países", 
+  varname.t        = "Ano",
+  use.mc.diff      = TRUE, 
+  use.mc.lev       = FALSE, 
+  use.mc.nonlin    = FALSE,      
+  include.y        = TRUE, 
+  varname.y        = "ln_pibc", 
+  lagTerms.y       = 1,
+  maxLags.y        = 2,           
+  fur.con          = TRUE, 
+  fur.con.diff     = TRUE, 
+  fur.con.lev      = FALSE,      
+  varname.reg.fur  = c("ln_com", "ln_inv", "Inflação", "Taxa.de.Câmbio", "Capital.Humano"),
+  lagTerms.reg.fur = c(1, 1, 1, 1, 1),
+  include.dum      = TRUE, 
+  dum.diff         = TRUE, 
+  dum.lev          = TRUE, 
+  varname.dum      = "Ano",
+  w.mat            = "iid.err", 
+  std.err          = "corrected",
+  estimation       = "twostep", 
+  opt.meth         = "none"
+)
+
+summary(Arelanoa_TwoStep)
+
+# --- MODELO GMM SISTÊMICO (SYSTEM GMM) ---
+
+Arelanoa_System <- pdynmc(
+  dat              = Dados1, 
+  varname.i        = "Países", 
+  varname.t        = "Ano",
+  
+  use.mc.diff      = TRUE, 
+  use.mc.lev       = TRUE, 
+  use.mc.nonlin    = FALSE,
+  
+  include.y        = TRUE, 
+  varname.y        = "ln_pibc", 
+  lagTerms.y       = 1,
+  maxLags.y        = 2,           # REDUZIDO: Use apenas o lag 1 como instrumento
+  
+  fur.con          = TRUE, 
+  fur.con.diff     = TRUE, 
+  fur.con.lev      = FALSE,          # ALTERADO: Desativa instrumentos em nível para os controles
+  
+  varname.reg.fur  = c("ln_com", "ln_inv", "Inflação", "Taxa.de.Câmbio", "Capital.Humano"),
+  lagTerms.reg.fur = c(1, 1, 1, 1, 1),
+  
+  include.dum      = TRUE, 
+  dum.diff         = TRUE, 
+  dum.lev          = FALSE,          # REDUZIDO: Menos dummies em nível para poupar graus de liberdade
+  
+  varname.dum      = "Ano",
+  w.mat            = "iid.err", 
+  std.err          = "corrected",
+  estimation       = "twostep",  
+  opt.meth         = "none"
+)
+
+summary(Arelanoa_System)
+
+#TESTANDO A AUTOCORRELAÇÃO
+# mtest.fct(Arelanob, t.order = 1)
+# mtest.fct(Arelanob, t.order = 2)
+# mtest.fct(Arelanob, t.order = 3)
+#TESTE PARA RESTRIÇÕES DE SOBREIDENTIFICAÇÃO
+jtest.fct(Arelanoa_System)
+#TESTE DE SIGNIFICÂNCIA CONJUNTA DE TODOS OS PARÂMETROS
+wald.fct(param = "all", object = Arelanoa_System)
+
+#Autocorrelação
+mtest.fct(Arelanoa_System)
+##################################################################################
+Arelano_Iterativo_Ajustado <- pdynmc(
+  dat              = Dados1, 
+  varname.i        = "Países", 
+  varname.t        = "Ano",
+  
+  use.mc.diff      = TRUE, 
+  use.mc.lev       = TRUE, 
+  use.mc.nonlin    = FALSE,
+  
+  include.y        = TRUE, 
+  varname.y        = "ln_pibc", 
+  lagTerms.y       = 1,
+  # LIMITANDO INSTRUMENTOS: Usa apenas os lags 2 e 3 como instrumentos
+  maxLags.y        = 2,           
+  
+  fur.con          = TRUE, 
+  fur.con.diff     = TRUE, 
+  # Desativamos instrumentos em nível para os controles para evitar o Hansen = 1
+  fur.con.lev      = FALSE,       
+  
+  varname.reg.fur  = c("ln_com", "ln_inv", "Inflação", "Taxa.de.Câmbio", "Capital.Humano"),
+  lagTerms.reg.fur = c(0, 0, 0, 0, 0), 
+  
+  include.dum      = TRUE, 
+  dum.diff         = TRUE, 
+  dum.lev          = FALSE, # Dummies apenas em diferença para poupar o modelo
+  varname.dum      = "Ano",
+  
+  w.mat            = "iid.err", 
+  std.err          = "corrected", 
+  estimation       = "iterative", # Mantemos o seu desejo pelo iterativo
+  max.iter         = 50,          # 50 iterações costumam ser suficientes para convergir
+  iter.tol         = 0.01, 
+  opt.meth         = "none"
+)
+
+summary(Arelano_Iterativo_Ajustado)
+
+##################################################################################
+# 1. Primeiro, certifique-se que o id1 é um fator nos dados
+Dados1$id1<-2
+Dados1$id1[Dados1$Países == "Arábia Saudita"| Dados1$Países == "Argélia"|
+             Dados1$Países == "Armênia"| Dados1$Países == "Austrália"|
+             Dados1$Países == "Bahrein"| Dados1$Países == "Brasil"|
+             Dados1$Países == "Bolívia"| Dados1$Países == "Camerões"|
+             Dados1$Países == "Chile"| Dados1$Países == "Colômbia"|
+             Dados1$Países == "Costa do Marfim"| Dados1$Países == "Gabão"|
+             Dados1$Países == "Gana"| Dados1$Países == "Grécia"|
+             Dados1$Países == "Islândia"| Dados1$Países == "Noruega"|
+             Dados1$Países == "Nova Zelândia"| Dados1$Países == "Rússia"|
+             Dados1$Países == "África do sul"| Dados1$Países == "Ucrânia"|
+             Dados1$Países == "Uganda"| Dados1$Países == "Uruguai"
+]<-1# Dados1$id1[Dados1$id1 != 1]<-2
+
+# 2. Rodar o GMM com interações
+
+Arelano_Interacao <- pdynmc(
+  dat              = Dados1, 
+  varname.i        = "Países", 
+  varname.t        = "Ano",
+  use.mc.diff      = TRUE, 
+  use.mc.lev       = TRUE, 
+  use.mc.nonlin    = FALSE,
+  include.y        = TRUE, 
+  varname.y        = "ln_pibc", 
+  lagTerms.y       = 1,
+  maxLags.y = 2,
+  fur.con          = TRUE, 
+  fur.con.diff     = TRUE, 
+  fur.con.lev      = FALSE,
+  
+  # Aqui incluímos as variáveis originais E as interações com o grupo
+  varname.reg.fur  = c(
+    "ln_com", "ln_inv", "Inflação", "Taxa.de.Câmbio", "Capital.Humano",
+    "id1:ln_com", "id1:ln_inv", "id1:Inflação", "id1:Taxa.de.Câmbio", "id1:Capital.Humano"
+  ),
+  
+  # Definimos lags para cada termo (incluindo as interações)
+  # Se usar lag 0 para os originais, use 0 para as interações
+  lagTerms.reg.fur = c(1, 1, 1, 1, 1, 1, 1, 1, 1, 1), 
+  
+  include.dum      = TRUE, 
+  dum.diff         = TRUE, 
+  dum.lev          = FALSE, 
+  varname.dum      = "Ano",
+  w.mat            = "iid.err", 
+  std.err          = "corrected",
+  estimation       = "twostep",  
+  opt.meth         = "none"
+)
+
+summary(Arelano_Interacao)
+
+
+################################################################################
+
+# Passo 1: criar explicitamente no dataframe
+Dados1$ln_com_D    <- Dados1$ln_com         * Dados1$id1
+Dados1$ln_inv_D    <- Dados1$ln_inv         * Dados1$id1
+Dados1$inf_D       <- Dados1$Inflação       * Dados1$id1
+Dados1$cambio_D    <- Dados1$Taxa.de.Câmbio * Dados1$id1
+Dados1$caphum_D    <- Dados1$Capital.Humano * Dados1$id1
+
+# Passo 2: rodar o modelo com as variáveis explícitas
+Arelano_Interacao2 <- pdynmc(
+  dat             = Dados1,
+  varname.i       = "Países",
+  varname.t       = "Ano",
+  
+  use.mc.diff     = TRUE,
+  use.mc.lev      = TRUE,
+  use.mc.nonlin   = FALSE,
+  
+  include.y       = TRUE,
+  varname.y       = "ln_pibc",
+  lagTerms.y      = 1,
+  maxLags.y       = 2,
+  
+  fur.con         = TRUE,
+  fur.con.diff    = TRUE,
+  fur.con.lev     = FALSE,
+  
+  varname.reg.fur  = c(
+    "ln_com",    "ln_inv",    "Inflação",
+    "Taxa.de.Câmbio", "Capital.Humano",
+    "ln_com_D",  "ln_inv_D",  "inf_D",
+    "cambio_D",  "caphum_D"
+  ),
+  lagTerms.reg.fur = c(1, 1, 1, 1, 1,
+                       1, 1, 1, 1, 1),
+  
+  include.dum     = TRUE,
+  dum.diff        = TRUE,
+  dum.lev         = FALSE,
+  varname.dum     = "Ano",
+  
+  w.mat           = "iid.err",
+  std.err         = "corrected",
+  estimation      = "twostep",
+  opt.meth        = "none"
+)
+summary(Arelano_Interacao2)
+#TESTE PARA RESTRIÇÕES DE SOBREIDENTIFICAÇÃO
+jtest.fct(Arelano_Interacao2)
+
+#TESTE DE SIGNIFICÂNCIA CONJUNTA DE TODOS OS PARÂMETROS
+wald.fct(param = "all", object = Arelano_Interacao2)
+
+#Autocorrelação
+mtest.fct(Arelano_Interacao2)
+
+##################################################################################
+# Analisar Série estacionária
+# Estruturar o painel com os mesmos índices do seu pdynmc
+painel_ips <- pdata.frame(Dados1,
+                          index = c("Países", "Ano"),
+                          drop.index = FALSE)
+
+# Variável dependente
+ips_pibc <- purtest(painel_ips$ln_pibc,
+                    test = "ips", exo = "trend",
+                    lags = "AIC", pmax = 4)
+summary(ips_pibc)
+
+# Corrente de comércio
+ips_com <- purtest(painel_ips$ln_com,
+                   test = "ips", exo = "trend",
+                   lags = "AIC", pmax = 4)
+summary(ips_com)
+
+# Investimento (formação bruta de capital)
+ips_inv <- purtest(painel_ips$ln_inv,
+                   test = "ips", exo = "trend",
+                   lags = "AIC", pmax = 4)
+summary (ips_inv)
+
+# Inflação (sem tendência — série oscilante por natureza)
+ips_infla <- purtest(painel_ips$Inflação,
+                     test = "ips", exo = "intercept",
+                     lags = "AIC", pmax = 4)
+summary(ips_infla)
+
+# Taxa de câmbio
+ips_cambio <- purtest(painel_ips$Taxa.de.Câmbio,
+                      test = "ips", exo = "trend",
+                      lags = "AIC", pmax = 4)
+summary(ips_cambio)
+
+# Capital humano
+ips_hci <- purtest(painel_ips$Capital.Humano,
+                   test = "ips", exo = "trend",
+                   lags = "AIC", pmax = 4)
+summary(ips_hci)
+
+save.image("~/Diss_Danilo/Resultados/resultados gmm.RData")
