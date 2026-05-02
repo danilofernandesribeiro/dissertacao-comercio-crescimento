@@ -99,13 +99,6 @@ names(Dados) <- make.names(names(Dados))
 # Verificar os nomes das colunas
 print(names(Dados))
 
-#Adicionar lag em capital humano
-Dados <- Dados %>%
-  arrange(Países, Ano) %>%
-  group_by(Países) %>%
-  mutate(Capital_Humano_Lag5 = lag(`Capital.Humano`, 5)) %>%
-  ungroup()
-
 #Calcular média, mínimo e máximo
 
 describe(Dados)[, c("mean", "min", "max")]
@@ -127,7 +120,8 @@ is_balanced
 
 
 mod_ols1 <- lm(ln_pibc ~ ln_com + ln_inv + 
-                 Inflação + Taxa.de.Câmbio + Capital_Humano_Lag5 + Dependentescomm , data = Dados)
+                 Inflação + Taxa.de.Câmbio + Capital.Humano, 
+               data = Dados)
 
 summary(mod_ols1)
 
@@ -201,7 +195,7 @@ print(p1_fixo)
 # ESTIMATIVA DE EFEITO FIXO
 
 modelo_fe <- plm( ln_pibc ~ ln_com + ln_inv + 
-                    Inflação + Taxa.de.Câmbio + Capital_Humano_Lag5 + Dependentescomm,
+                    Inflação + Taxa.de.Câmbio + Capital.Humano,
                   data = Dados,
                   index = c("Países", "Ano"),
                   model = "within"  # efeito fixo
@@ -214,7 +208,7 @@ summary(modelo_fe)
 #MODELO DE EFEITO ALEATÓRIO
 
 modelore <- plm(ln_pibc ~ ln_com + ln_inv + 
-                  Inflação + Taxa.de.Câmbio + Capital_Humano_Lag5 + Dependentescomm,
+                  Inflação + Taxa.de.Câmbio + Capital.Humano,
                 data = Dados,
                 index = c("Países", "Ano"),
                 model = "random"
@@ -235,190 +229,72 @@ pFtest(modelo_fe, mod_ols1)
 phtest(modelo_fe , modelore )
 
 
-#Teste F para verificar efeitos de tempo
-plmtest(modelore, effect = "time")
-
 ##############################################################################
-
-#Two-way
-
-modelo_fe_twoway <- plm(
-  ln_pibc ~ ln_com + ln_inv + Inflação + Taxa.de.Câmbio + Capital_Humano_Lag5 + Dependentescomm,
-  data = Dados,
-  index = c("Países", "Ano"),
-  effect = "twoways",
-  model = "within"
-)
-
-summary(modelo_fe_twoway)
-
-###############################################################################
-#Modelo between
-
-modelo_between <- plm(ln_pibc ~ ln_com + ln_inv + Inflação + Taxa.de.Câmbio + 
-                        Capital_Humano_Lag5 + Dependentescomm,
-                      data = Dados,
-                      model = "between")
-summary(modelo_between )
-
-
-################################################################################
 
 #Teste de autocorrelação DW
 
-pdw_result <- pdwtest(modelo_fe_twoway, alternative = "two.sided")
+pdw_result <- pdwtest(modelo_fe , alternative = "two.sided")
 print(pdw_result)
 
 #teste de Wooldridge
-pbgtest(modelo_fe_twoway)
+pbgtest(modelo_fe )
 
 
 # TESTE PARA HETEROCEDASTICIA --> H0) The null hypothesis for the Breusch-Pagan test is homoskedasticity
 
-bptest(modelo_fe_twoway, data = Dados,  studentize=F)
+bptest(modelo_fe , data = Dados,  studentize=F)
 
 ################################################################################
 
 # Rodando o teste de Conditional LM para erros AR(1) ou MA(1)
-conditional_lm_test <- pcdtest(modelo_fe_twoway, test = "lm")
+conditional_lm_test <- pcdtest(modelo_fe, test = "lm")
 print(conditional_lm_test)
 
 ################################################################################
 #Driscoll-Kraay
 
-summary(modelo_fe_twoway, vcov = function(x) vcovSCC(x, type = "HC1", maxlag = 2))
+summary(modelo_fe , vcov = function(x) vcovSCC(x, type = "HC1", maxlag = 2))
 
 
 ################################################################################
-
-# DEFINIÇÃO DOS GRUPOS E FILTRAGEM
-################################################################################
-
-# Definir os países do Grupo A (Dependentes de Commodities)
-# Nota: Inclua os nomes exatamente como aparecem na sua coluna 'Países'
-
-
-paises_grupo_A <- c(
-  "Arábia Saudita", "Argélia", "Armênia", "Austrália", "Bahrein",
-  "Brasil", "Bolívia", "Camerões", "Chile", "Colômbia",
-  "Costa do Marfim", "Gabão", "Gana", "Grécia", "Islândia",
-  "Noruega", "Nova Zelândia", "Rússia", "África do sul",
-  "Ucrânia", "Uganda", "Uruguai"
+Dados1<-Dados
+Dados1$id1<-2
+Dados1$id1[Dados1$Países == "Arábia Saudita"| Dados1$Países == "Argélia"|
+             Dados1$Países == "Armênia"| Dados1$Países == "Austrália"|
+             Dados1$Países == "Bahrein"| Dados1$Países == "Brasil"|
+             Dados1$Países == "Bolívia"| Dados1$Países == "Camerões"|
+             Dados1$Países == "Chile"| Dados1$Países == "Colômbia"|
+             Dados1$Países == "Costa do Marfim"| Dados1$Países == "Gabão"|
+             Dados1$Países == "Gana"| Dados1$Países == "Grécia"|
+             Dados1$Países == "Islândia"| Dados1$Países == "Noruega"|
+             Dados1$Países == "Nova Zelândia"| Dados1$Países == "Rússia"|
+             Dados1$Países == "África do sul"| Dados1$Países == "Ucrânia"|
+             Dados1$Países == "Uganda"| Dados1$Países == "Uruguai"
+]<-1# Dados1$id1[Dados1$id1 != 1]<-2
+#DECLARAR DADOS COMO DE PAINEL
+pdata.frame(Dados1, index=c("Países","Ano"))
+modelo_fe_gruposD<- plm(ln_pibc ~ ln_com + ln_inv + Inflação + Taxa.de.Câmbio + Capital.Humano+
+                          factor(id1)*ln_com + factor(id1)*ln_inv + 
+                          factor(id1)*Inflação + factor(id1)*Taxa.de.Câmbio + 
+                          factor(id1)*Capital.Humano,
+                        data = Dados1,
+                        model = "within",
 )
-
-
-# Filtrar a base de dados para os Grupos A e B
-# Nota: Você precisa que o nome da coluna de países seja "Países"
-Dados_GrupoA <- subset(Dados, Países %in% paises_grupo_A)
-Dados_GrupoB <- subset(Dados, !Países %in% paises_grupo_A) # Todos os outros
-
-print(Dados_GrupoA$Países)
-
-print(Dados_GrupoB$Países)
-
-#################################################################################
-# Declarar os dados como painel novamente para os subgrupos
-
-pdata_GrupoA <- pdata.frame(Dados_GrupoA, index = c("Países", "Ano"))
-
-pdata_GrupoB <- pdata.frame(Dados_GrupoB, index = c("Países", "Ano"))
-
-
-#################################################################################
-# 2. MODELO FE ROBUSTO PARA O GRUPO A (COMMODITIES)
-#################################################################################
-
-# Estimar o modelo de Efeitos Fixos (FE) para o Grupo A
-
-
-################################################################################
-
-modelo_fe_grupoAf <- plm(ln_pibc ~ ln_com + ln_inv + Inflação + Taxa.de.Câmbio + Capital_Humano_Lag5,
-                         data = pdata_GrupoA,
-                         model = "within",
-)
-summary(modelo_fe_grupoAf)
-
-modelo_fe_grupoAA <- plm(ln_pibc ~ ln_com + ln_inv + Inflação + Taxa.de.Câmbio + 
-                           Capital_Humano_Lag5,
-                         data = pdata_GrupoA,
-                         model = "random"
-)
-summary(modelo_fe_grupoAA)
-
-#Teste de Hausman
-
-phtest(modelo_fe_grupoAf,modelo_fe_grupoAA)
-
-#Teste F para verificar efeitos de tempo
-plmtest(modelo_fe_grupoAf, effect = "time")
-
+summary(modelo_fe_gruposD)
 
 #teste de Wooldridge
-pbgtest(modelo_fe_grupoAf)
+pbgtest(modelo_fe_gruposD)
 
 #HETEROCEDASTICIA
-bptest(modelo_fe_grupoAf, data = Dados,  studentize=F)
+bptest(modelo_fe_gruposD , data = Dados1,  studentize=F)
 
 ## Rodando o teste de Conditional LM para erros AR(1) ou MA(1)
 
-conditional_lm_test <- pcdtest(modelo_fe_grupoAf, test = "lm")
+conditional_lm_test <- pcdtest(modelo_fe_gruposD , test = "lm")
 print(conditional_lm_test)
 
-#Robusto
-
-
-summary(modelo_fe_grupoAf, vcov = function(x) vcovSCC(x, type = "HC1", maxlag = 2))
-
-
-#################################################################################
-# 3. MODELO FE ROBUSTO PARA O GRUPO B (OUTROS PAÍSES)
-#################################################################################
-
-# Estimar o modelo de Efeitos Fixos (FE) para o Grupo B
-modelo_fe_grupoB <- plm(ln_pibc ~ ln_com + ln_inv + Inflação + Taxa.de.Câmbio + Capital_Humano_Lag5,
-                        data = pdata_GrupoB,
-                        model = "within"
-)
-
-summary(modelo_fe_grupoB)
-
-modelo_fe_grupoBA <- plm(ln_pibc ~ ln_com + ln_inv + Inflação + Taxa.de.Câmbio + Capital_Humano_Lag5,
-                         data = pdata_GrupoB,
-                         model = "random"
-)
-
-summary(modelo_fe_grupoBA)
-
-#Teste de Hausman
-
-phtest(modelo_fe_grupoB,modelo_fe_grupoBA)
-
-#Teste F para verificar efeitos de tempo
-plmtest(modelo_fe_grupoB, effect = "time")
-
-###############################################################################
-
-
-#teste de Wooldridge
-pbgtest(modelo_fe_grupoB )
-
-#HETEROCEDASTICIA
-bptest(modelo_fe_grupoB , data = Dados,  studentize=F)
-
-## Rodando o teste de Conditional LM para erros AR(1) ou MA(1)
-
-conditional_lm_test <- pcdtest(modelo_fe_grupoB , test = "lm")
-print(conditional_lm_test)
-
-#Robusto
-
-
-summary(modelo_fe_grupoB, vcov = function(x) vcovSCC(x, type = "HC1", maxlag = 2))
-
-
-
-
+################################################################################
+summary(modelo_fe_gruposD , vcov = function(x) vcovSCC(x, type = "HC1", maxlag = 2))
 
 ################################################################################
 save.image("file = Resultados.Rdada")
